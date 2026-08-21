@@ -292,7 +292,8 @@ elif menu == "Quotation Entry":
             
             # Swapped text_input for selectbox!
             selected_material = st.selectbox("Material *", material_choices)
-            
+            # --- NEW FIELD ADDED HERE ---
+            vendor_description = st.text_area("Vendor's Quoted Product Details / Deviations")
             
             quantity = st.number_input("Quantity", min_value=0.0, step=1.0)
             basic_price = st.number_input("Basic Price", min_value=0.0, step=1.0)
@@ -315,7 +316,7 @@ elif menu == "Quotation Entry":
                         material_code = selected_material.split(" - ")[0]
                         
                         add_quotation(selected_rfq, vendor_code, str(quotation_date), payment_terms, incoterms, status)
-                        add_quotation_line(selected_rfq, vendor_code, material_code, quantity, basic_price, negotiated_price, delivery_days, make, material_description)
+                        add_quotation_line(selected_rfq, vendor_code, material_code, quantity, basic_price, negotiated_price, delivery_days, make, vendor_description)
                         
                         st.success("✅ Quotation and Material Line saved successfully.")
                     except Exception as error:
