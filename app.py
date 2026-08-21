@@ -50,20 +50,23 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # --- SECURITY GATE ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+    st.session_state["current_user"] = ""
 
 if not st.session_state["logged_in"]:
     st.title("🔒 Procurement System Login")
-    password_guess = st.text_input("Enter Admin Password", type="password")
+
+    username = st.text_input("Username")
+    password_guess = st.text_input("Password", type="password")
     
     if st.button("Log In"):
-        if password_guess == st.secrets["ADMIN_PASSWORD"]:
+        if username in st.secrets["passwords"] and password_guess == st.secrets["passwords"][username]:
             st.session_state["logged_in"] = True
-            st.rerun()  # Instantly refreshes the screen to unlock the app
+            st.session_state["current_user"] = username
+            st.rerun()  # Unlocks the app
         else:
-            st.error("Incorrect Password.")
+            st.error("Incorrect Username or Password. Please try again.")
     
-    # This completely stops the rest of the page from loading!
-    st.stop() 
+    st.stop()
 # ---------------------
 
 # Application title
