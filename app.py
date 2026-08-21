@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import textwrap
 
 from database import (
     create_tables,
@@ -320,13 +321,11 @@ elif menu == "Quotation Entry":
                         st.error(f"Error: {error}")
 
 
-# Odoo-Style Compare & Choose Matrix
-# Comparative Statement
+# Odoo-Style Compare & Choose Matrix (Printable & Smart)
 elif menu == "Comparative Statement":
-    st.header("RFQ Comparison Matrix")
-    st.write("Compare alternative vendor quotations. The system automatically highlights the best unit price, total price, and delivery time in green.")
+    st.header("RFQ Comparison Matrix & Approval Sheet")
+    st.write("Printable overview of quotations for management permission.")
 
-    # 1. Search for the RFQ
     rfq_number = st.text_input("Enter RFQ Number to Compare (e.g., RFQ-2026-001)")
     
     if rfq_number:
@@ -335,56 +334,57 @@ elif menu == "Comparative Statement":
         if len(data) == 0:
             st.warning(f"No quotations found for {rfq_number}.")
         else:
-            # Convert to Pandas DataFrame for Odoo-style highlighting
             df = pd.DataFrame(data)
             
-            # Function to highlight the lowest value in a column green
-            def highlight_best_option(s):
-                if s.dtype == 'float64' or s.dtype == 'int64':
-                    is_min = s == s.min()
-                    return ['background-color: #d4edda; color: #155724; font-weight: bold' if v else '' for v in is_min]
-                return ['' for _ in s]
+            # 1. SMART RANKING: Sort by Lowest Price, then Fastest Delivery
+            df = df.sort_values(by=['Total Price', 'Delivery (Days)']).reset_index(drop=True)
+            # Add a Ranking column (1 is best, 2 is mid, 3 is high)
+            df.insert(0, 'System Rank', range(1, len(df) + 1))
             
-            # Apply the green highlight to Price and Delivery columns
-            styled_df = df.style.apply(highlight_best_option, subset=['Unit Price', 'Total Price', 'Delivery (Days)'])
+            # 2. DROP INTERNAL CODES: Keep it clean for printing
+            if 'Vendor Code' in df.columns:
+                df = df.drop(columns=['Vendor Code', 'Material'])
             
-            # Display the Odoo-style matrix
-            st.dataframe(styled_df, use_container_width=True)
+            # 3. TEXT WRAPPING: Keep text to max ~60 words/clean lines for printing
+            def wrap_text(text):
+                if isinstance(text, str):
+                    words = text.split()
+                    if len(words) > 60:
+                        words = words[:60] + ["..."]
+                    return textwrap.fill(" ".join(words), width=80)
+                return text
+            
+            # Apply wrapping to text-heavy columns like Payment Terms
+            if 'Payment Terms' in df.columns:
+                df['Payment Terms'] = df['Payment Terms'].apply(wrap_text)
+
+            # Display the clean, ranked table
+            st.dataframe(df, use_container_width=True)
+            
+            st.info("🖨️ Press Command+P (Mac) or Ctrl+P (Windows) to print this clean sheet for L2/L3 approval.")
             
             st.markdown("---")
             
-            # 2. The Odoo "Choose" Button Interface
+            # The "Choose" Button Interface (Hidden on print)
             st.subheader("Choose Winning Vendor")
-            st.write("Select the best alternative to approve the purchase order.")
-            
-            # Extract just the vendors from the dataframe for the dropdown
-            vendor_choices = [f"{row['Vendor Code']} - {row['Vendor Name']}" for row in data]
+            # We must fetch the raw data again just to get the codes for the dropdown logic
+            raw_vendor_choices = [f"{row['Vendor Code']} - {row['Vendor Name']}" for row in data]
             
             with st.form("choose_vendor_form"):
-                selected_vendor = st.selectbox("Select Vendor to Approve *", vendor_choices)
+                selected_vendor = st.selectbox("Select Vendor to Approve *", raw_vendor_choices)
                 approver_name = st.text_input("Approver Name *")
-                approval_reason = st.selectbox(
-                    "Reason for Choice",
-                    ["Lowest Total Price", "Fastest Delivery", "Best Payment Terms", "Quality Requirement", "Other"]
-                )
+                approval_reason = st.selectbox("Reason for Choice", ["Lowest Total Price (Rank 1)", "Fastest Delivery", "Best Payment Terms", "Quality Requirement", "Other"])
                 
-                confirm_choice = st.form_submit_button("Confirm & Approve Purchase")
-                
-                if confirm_choice:
+                if st.form_submit_button("Confirm & Approve Purchase"):
                     if approver_name == "":
-                        st.error("Approver Name is required to confirm the choice.")
+                        st.error("Approver Name is required.")
                     else:
-                        # SAFETY CHECK: Check if this RFQ is already approved
-                        if get_approved_vendor_for_rfq(rfq_number):
-                            st.error(f"🛑 Stop! RFQ {rfq_number} has already been approved. You cannot approve it twice.")
-                        else:
-                            try:
-                                vendor_code = selected_vendor.split(" - ")[0]
-                                add_approval(rfq_number, vendor_code, approver_name, "Approved", approval_reason, "")
-                                st.success(f"✅ Success! Vendor {vendor_code} has been chosen and approved for {rfq_number}.")
-                            except Exception as error:
-                                st.error(f"Error saving approval: {error}")
-
+                        try:
+                            vendor_code = selected_vendor.split(" - ")[0]
+                            add_approval(rfq_number, vendor_code, approver_name, "Approved", approval_reason, "")
+                            st.success(f"Success! Vendor {vendor_code} approved for {rfq_number}.")
+                        except Exception as error:
+                            st.error(f"Error saving approval: {error}")
 
 # Vendor Approval
 elif menu == "Vendor Approval":
