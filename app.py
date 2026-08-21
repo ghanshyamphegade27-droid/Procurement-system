@@ -67,8 +67,7 @@ if not st.session_state["logged_in"]:
             st.error("Incorrect Username or Password. Please try again.")
     
     st.stop()
-# ---------------------
-
+    
 # Application title
 st.title("📦 Procurement System")
 st.write("V0.1 - Vendor and Material Master")
