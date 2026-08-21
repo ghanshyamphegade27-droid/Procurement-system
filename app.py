@@ -45,7 +45,7 @@ hide_streamlit_style = """
     [data-testid="stToolbar"] {visibility: hidden;}
     </style>
 """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)   
 
 # --- SECURITY GATE ---
 if "logged_in" not in st.session_state:
@@ -73,8 +73,8 @@ st.title("📦 Procurement System")
 st.write("V0.1 - Vendor and Material Master")
 
 
-# Left-side menu
-menu = st.sidebar.selectbox(
+# Main Page Menu
+menu = st.radio(
     "Select Module",
     [
         "Dashboard",
@@ -86,8 +86,10 @@ menu = st.sidebar.selectbox(
         "Comparative Statement",
         "Vendor Approval",
         "Order Closure & Report"
-    ]
+    ],
+    horizontal=True  # This makes it lay flat across the middle of your screen!
 )
+st.markdown("---") # Adds a nice visual line under your menu
 
 # Dashboard
 if menu == "Dashboard":
