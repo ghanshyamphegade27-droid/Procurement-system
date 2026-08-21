@@ -38,6 +38,16 @@ st.set_page_config(
     layout="wide"
 )
 
+# Hide the Streamlit default menu and GitHub icon
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+
 
 # Application title
 st.title("📦 Procurement System")
