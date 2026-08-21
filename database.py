@@ -305,22 +305,40 @@ def close_order(rfq_number, vendor_code, gst_percentage):
             cursor.execute("UPDATE rfqs SET status = 'Closed - Delivered' WHERE rfq_number = %s", (rfq_number,))
     return True
 
-
 def get_closed_orders_report():
     with get_db_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT 
-                    oc.rfq_number AS "Order No", oc.vendor_code AS "Vendor", ql.material_code AS "Material",
-                    ql.basic_price AS "Basic Price", ql.negotiated_price AS "Negotiated Price",
-                    CASE WHEN ql.basic_price > 0 THEN ROUND((((ql.basic_price - ql.negotiated_price) / ql.basic_price) * 100)::numeric, 2) ELSE 0 END AS "Discount (%)",
-                    oc.gst_percentage AS "GST (%)", ROUND((ql.negotiated_price + (ql.negotiated_price * oc.gst_percentage / 100))::numeric, 2) AS "Final Landed Price"
-                FROM order_closures oc
-                JOIN quotation_lines ql ON oc.rfq_number = ql.rfq_number AND oc.vendor_code = ql.vendor_code
-                ORDER BY oc.closure_date DESC
-            """)
-            columns = [description[0] for description in cursor.description]
-            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                oc.rfq_number AS "Order No",
+                v.vendor_name AS "Vendor",
+                m.material_name AS "Material",
+                ql.quantity AS "Quantity",
+                m.unit AS "Unit",
+                ql.basic_price AS "Unit Basic Price",
+                ql.negotiated_price AS "Unit Negotiated Price",
+                CASE 
+                    WHEN ql.basic_price > 0 
+                    THEN ROUND((((ql.basic_price - ql.negotiated_price) / ql.basic_price) * 100)::numeric, 2) 
+                    ELSE 0 
+                END AS "Discount (%)",
+                ROUND((ql.quantity * ql.negotiated_price)::numeric, 2) AS "Total Negotiated Value (Excl. Tax)",
+                oc.gst_percentage AS "GST (%)",
+                ROUND(((ql.quantity * ql.negotiated_price) * (1 + oc.gst_percentage / 100.0))::numeric, 2) AS "Total Landed Price (Incl. Tax)"
+            FROM order_closures oc
+            JOIN quotation_lines ql 
+              ON oc.rfq_number = ql.rfq_number AND oc.vendor_code = ql.vendor_code
+            LEFT JOIN vendors v 
+              ON oc.vendor_code = v.vendor_code
+            LEFT JOIN materials m 
+              ON ql.material_code = m.material_code
+            ORDER BY oc.closure_date DESC
+        """)
+        
+        columns = [description[0] for description in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return results
 
 
 def get_all_vendors():
