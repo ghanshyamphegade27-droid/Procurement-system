@@ -392,48 +392,62 @@ elif menu == "Comparative Statement":
 elif menu == "Vendor Approval":
     st.header("Vendor Approval")
     st.write("Approve or reject a recommended vendor quotation.")
-
-    with st.form("approval_form"):
-        rfq_number = st.text_input("RFQ Number *")
-        vendor_code = st.text_input("Selected Vendor Code *")
-        approver_name = st.text_input("Approver Name (Manager) *")
+    
+    # 1. Fetch data for dropdowns
+    rfqs = get_all_rfqs()
+    vendors = get_all_vendors()
+    
+    if not rfqs or not vendors:
+        st.warning("⚠️ You need at least one RFQ and Vendor created before approving.")
+    else:
+        # Format the vendor dropdown options
+        vendor_choices = [f"{v['Vendor Code']} - {v['Vendor Name']}" for v in vendors]
         
-        approval_status = st.selectbox(
-            "Approval Status",
-            ["Approved", "Rejected"]
-        )
-        
-        approval_reason = st.selectbox(
-            "Reason for Decision",
-            [
-                "Lowest Price",
-                "Better Delivery",
-                "Better Payment Terms",
-                "Approved Make",
-                "Quality Requirement",
-                "Existing Supplier",
-                "Emergency Requirement",
-                "Other"
-            ]
-        )
-        
-        deviation_reason = st.text_area("Explanation / Deviation Reason (if bypassing the lowest price)")
-        
-        save_approval = st.form_submit_button("Submit Approval")
-
-        if save_approval:
-            if rfq_number == "" or vendor_code == "" or approver_name == "":
-                st.error("RFQ Number, Vendor Code, and Approver Name are required.")
-            elif approval_status == "Approved" and get_approved_vendor_for_rfq(rfq_number):
-                # SAFETY CHECK: Prevent approving an already approved RFQ
-                st.error(f"🛑 Stop! RFQ {rfq_number} has already been approved.")
-            else:
-                try:
-                    add_approval(rfq_number, vendor_code, approver_name, approval_status, approval_reason, deviation_reason)
-                    st.success(f"Vendor quotation {approval_status.lower()} successfully.")
-                except Exception as error:
-                    st.error(f"Error: {error}")
-
+        with st.form("approval_form"):
+            # 2. Swap text_input for selectbox!
+            selected_rfq = st.selectbox("RFQ Number *", rfqs)
+            selected_vendor = st.selectbox("Selected Vendor *", vendor_choices)
+            
+            approver_name = st.text_input("Approver Name (Manager) *")
+            
+            approval_status = st.selectbox(
+                "Approval Status",
+                ["Approved", "Rejected"]
+            )
+            
+            approval_reason = st.selectbox(
+                "Reason for Decision",
+                [
+                    "Lowest Price",
+                    "Better Delivery",
+                    "Better Payment Terms",
+                    "Approved Make",
+                    "Quality Requirement",
+                    "Existing Supplier",
+                    "Emergency Requirement",
+                    "Other"
+                ]
+            )
+            
+            deviation_reason = st.text_area("Explanation / Deviation Reason (if bypassing the lowest price)")
+            
+            save_approval = st.form_submit_button("Submit Approval")
+            
+            if save_approval:
+                if not selected_rfq or not selected_vendor or approver_name == "":
+                    st.error("RFQ Number, Vendor Code, and Approver Name are required.")
+                elif approval_status == "Approved" and get_approved_vendor_for_rfq(selected_rfq):
+                    # SAFETY CHECK: Prevent approving an already approved RFQ
+                    st.error(f"🛑 Stop! RFQ {selected_rfq} has already been approved.")
+                else:
+                    try:
+                        # 3. Extract the exact vendor code from the dropdown string
+                        vendor_code = selected_vendor.split(" - ")[0]
+                        
+                        add_approval(selected_rfq, vendor_code, approver_name, approval_status, approval_reason, deviation_reason)
+                        st.success(f"Vendor quotation {approval_status.lower()} successfully.")
+                    except Exception as error:
+                        st.error(f"Error: {error}")
 
 # Master Data View
 elif menu == "Master Data View":
