@@ -84,6 +84,7 @@ def create_tables():
                     rfq_number TEXT NOT NULL,
                     vendor_code TEXT NOT NULL,
                     material_code TEXT NOT NULL,
+                    material_description TEXT
                     quantity REAL,
                     basic_price REAL,
                     negotiated_price REAL,
@@ -91,6 +92,11 @@ def create_tables():
                     make TEXT
                 )
             """)
+            try:
+                cursor.execute("ALTER TABLE quotation_lines ADD COLUMN material_description TEXT")
+            except:
+                pass # If the column already exists, it just skips this safely!
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS approvals (
                     id SERIAL PRIMARY KEY,
@@ -155,13 +161,13 @@ def add_quotation(rfq_number, vendor_code, quotation_date, payment_terms, incote
     return True
 
 
-def add_quotation_line(rfq_number, vendor_code, material_code, quantity, basic_price, negotiated_price, delivery_days, make):
+def add_quotation_line(rfq_number, vendor_code, material_code, material_description, quantity, basic_price, negotiated_price, delivery_days, make):
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO quotation_lines (rfq_number, vendor_code, material_code, quantity, basic_price, negotiated_price, delivery_days, make)
+                INSERT INTO quotation_lines (rfq_number, vendor_code, material_code, material_description, quantity, basic_price, negotiated_price, delivery_days, make)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (rfq_number, vendor_code, material_code, quantity, basic_price, negotiated_price, delivery_days, make))
+            """, (rfq_number, vendor_code, material_code,material_description, quantity, basic_price, negotiated_price, delivery_days, make))
     return True
 
 
@@ -173,6 +179,8 @@ def get_comparative_data(rfq_number):
                     q.vendor_code AS "Vendor Code",
                     v.vendor_name AS "Vendor Name",
                     ql.material_code AS "Material",
+                    m.description AS "Our Req. Spec"
+                    ql.vendor_description AS "Vendor's Quoted Spec",
                     ql.quantity AS "Qty",
                     ql.negotiated_price AS "Unit Price",
                     (ql.quantity * ql.negotiated_price) AS "Total Price",
@@ -180,10 +188,13 @@ def get_comparative_data(rfq_number):
                     q.payment_terms AS "Payment Terms",
                     q.incoterms AS "Incoterms"
                 FROM quotations q
-                JOIN quotation_lines ql ON q.rfq_number = ql.rfq_number AND q.vendor_code = ql.vendor_code
-                LEFT JOIN vendors v ON q.vendor_code = v.vendor_code
+                JOIN quotation_lines ql 
+                    ON q.rfq_number = ql.rfq_number AND q.vendor_code = ql.vendor_code
+                LEFT JOIN vendors v 
+                    ON q.vendor_code = v.vendor_code
                 WHERE q.rfq_number = %s
             """, (rfq_number,))
+            
             columns = [description[0] for description in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
