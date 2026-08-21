@@ -93,12 +93,6 @@ def create_tables():
                     vendor_description TEXT
                 )
             """)
-            try:
-                cursor.execute("ALTER TABLE quotation_lines ADD COLUMN vendor_description TEXT") # <--- CHANGED THIS
-            except:
-                pass
-
-
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS approvals (
                     id SERIAL PRIMARY KEY,
