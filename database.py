@@ -84,13 +84,13 @@ def create_tables():
                     rfq_number TEXT NOT NULL,
                     vendor_code TEXT NOT NULL,
                     material_code TEXT NOT NULL,
-                    material_description TEXT
+                    material_description TEXT,
                     quantity REAL,
                     basic_price REAL,
                     negotiated_price REAL,
                     delivery_days INTEGER,
                     make TEXT,
-                    vendor_description TEXT -- <--- CHANGED THIS
+                    vendor_description TEXT
                 )
             """)
             try:
