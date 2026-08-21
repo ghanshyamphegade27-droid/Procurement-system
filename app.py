@@ -38,10 +38,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Hide the Streamlit default menu and GitHub icon
+# Hide the Streamlit default menu and GitHub icon but KEEP sidebar toggle
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden;}
     </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
