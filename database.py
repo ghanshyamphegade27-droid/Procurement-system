@@ -188,6 +188,8 @@ def get_comparative_data(rfq_number):
                     ON q.rfq_number = ql.rfq_number AND q.vendor_code = ql.vendor_code
                 LEFT JOIN vendors v 
                     ON q.vendor_code = v.vendor_code
+                LEFT JOIN materials m 
+                    ON ql.material_code = m.material_code
                 WHERE q.rfq_number = %s
             """, (rfq_number,))
 
