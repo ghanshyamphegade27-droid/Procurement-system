@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import textwrap
+import datetime
 
 from database import (
     create_tables,
@@ -28,7 +29,8 @@ from database import (
     is_order_closed,
     validate_vendor_link,
     datetime,
-    mark_link_submitted
+    mark_link_submitted,
+    create_vendor_link,      # <-- ADD THIS
 )
 
 # Create the database tables
@@ -307,7 +309,34 @@ elif menu == "New RFQ":
                 st.success(f"✅ RFQ {auto_rfq_code} created successfully!")
             except Exception as error:
                 st.error(f"Error: {error}")
+        # --- Generate a private quotation link for a vendor ---
+    st.markdown("---")
+    st.subheader("📨 Invite a Vendor to Quote")
+    st.write("Generates a private link. That vendor sees only their own form — no other vendor names or prices.")
 
+    existing_rfqs = get_all_rfqs()
+    existing_vendors = get_all_vendors()
+
+    if not existing_rfqs or not existing_vendors:
+        st.info("Save at least one RFQ and one Vendor first, then come back here to generate links.")
+    else:
+        col_a, col_b = st.columns(2)
+        with col_a:
+            link_rfq = st.selectbox("Select RFQ", existing_rfqs, key="link_rfq_select")
+        with col_b:
+            vendor_lookup = {f"{v['Vendor Code']} - {v['Vendor Name']}": v['Vendor Code'] for v in existing_vendors}
+            link_vendor_label = st.selectbox("Select Vendor", list(vendor_lookup.keys()), key="link_vendor_select")
+
+        if st.button("Generate Quotation Link"):
+            vendor_code = vendor_lookup[link_vendor_label]
+            token = create_vendor_link(link_rfq, vendor_code)
+            base_url = st.secrets.get("APP_BASE_URL", "https://your-app-name.streamlit.app")
+            full_link = f"{base_url}/?token={token}"
+
+            st.success(f"Link generated for {link_vendor_label} on {link_rfq}")
+            st.code(full_link, language=None)
+            st.caption("👆 Hover the box above — a copy icon appears in the top-right corner. Copy it and send privately (WhatsApp/email). Anyone with this exact link can submit on the vendor's behalf, so don't post it anywhere public.")
+    
 # Quotation Entry
 elif menu == "Quotation Entry":
     st.header("Enter Vendor Quotation")
@@ -569,3 +598,4 @@ elif menu == "Order Closure & Report":
     except Exception as error:
         st.error(f"Waiting for database tables to update... (Error: {error})")
 
+   
