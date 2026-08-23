@@ -30,7 +30,10 @@ from database import (
     validate_vendor_link,
     datetime,
     mark_link_submitted,
-    create_vendor_link,      # <-- ADD THIS
+    create_vendor_link,     # <-- ADD THIS
+    add_rfq_material,
+    get_materials_for_rfq,
+    get_materials_by_codes,
 )
 
 # Create the database tables
@@ -68,37 +71,45 @@ if token:
     st.write(f"Submitting as **{link_info['vendor_name']}** for RFQ **{link_info['rfq_number']}**")
     st.info(link_info["product_details"])
 
-    materials = get_all_materials()
-    material_choices = [f"{m['Material Code']} - {m['Material Name']}" for m in materials]
+    materials = get_materials_by_codes(link_info["material_codes"])
+    if not materials:
+        st.error("No materials are configured for this link. Please contact your procurement contact.")
+        st.stop()
 
     with st.form("vendor_quote_form"):
-        selected_material = st.selectbox("Material *", material_choices)
-        vendor_description = st.text_area("Your Quoted Product Details / Deviations")
-        quantity = st.number_input("Quantity", min_value=0.0, step=1.0)
-        basic_price = st.number_input("Basic Price", min_value=0.0, step=1.0)
-        negotiated_price = st.number_input("Your Best Price", min_value=0.0, step=1.0)
-        delivery_days = st.number_input("Delivery Lead Time (Days)", min_value=0, step=1)
         payment_terms = st.text_input("Payment Terms")
         incoterms = st.selectbox("Incoterms", ["EXW", "FCA", "FOB", "CIF", "DAP", "DDP", "Other"])
-        make = st.text_input("Make / Brand")
+
+        material_inputs = {}
+        for m in materials:
+            st.markdown(f"### {m['Material Code']} — {m['Material Name']}")
+            if m.get("Description"):
+                st.caption(m["Description"])
+            qty = st.number_input(f"Quantity ({m['Unit']})", min_value=0.0, step=1.0, key=f"qty_{m['Material Code']}")
+            basic = st.number_input("Basic Price", min_value=0.0, step=1.0, key=f"basic_{m['Material Code']}")
+            neg = st.number_input("Your Best Price", min_value=0.0, step=1.0, key=f"neg_{m['Material Code']}")
+            delivery = st.number_input("Delivery Lead Time (Days)", min_value=0, step=1, key=f"del_{m['Material Code']}")
+            make = st.text_input("Make / Brand", key=f"make_{m['Material Code']}")
+            desc = st.text_area("Your Quoted Product Details / Deviations", key=f"desc_{m['Material Code']}")
+            material_inputs[m["Material Code"]] = (qty, basic, neg, delivery, make, desc)
+            st.markdown("---")
 
         submitted = st.form_submit_button("Submit Quotation")
 
         if submitted:
-            if quantity <= 0 or basic_price <= 0 or negotiated_price <= 0:
-                st.error("Quantity and prices must be greater than zero.")
+            valid = all(v[0] > 0 and v[1] > 0 and v[2] > 0 for v in material_inputs.values())
+            if not valid:
+                st.error("Quantity and prices must be greater than zero for every material.")
             else:
-                material_code = selected_material.split(" - ")[0]
                 add_quotation(link_info["rfq_number"], link_info["vendor_code"],
                                str(datetime.date.today()), payment_terms, incoterms, "Received")
-                add_quotation_line(link_info["rfq_number"], link_info["vendor_code"],
-                                    material_code, vendor_description, quantity,
-                                    basic_price, negotiated_price, delivery_days, make)
+                for material_code, (qty, basic, neg, delivery, make, desc) in material_inputs.items():
+                    add_quotation_line(link_info["rfq_number"], link_info["vendor_code"],
+                                        material_code, desc, qty, basic, neg, delivery, make)
                 mark_link_submitted(token)
                 st.success("✅ Thank you! Your quotation has been received.")
 
-    st.stop()   # <-- non-negotiable: prevents fallthrough into the internal app
-
+    st.stop()
 # --- SECURITY GATE ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -299,7 +310,24 @@ elif menu == "New RFQ":
         currency = st.selectbox("Currency", ["INR", "USD", "EUR"])
         location = st.text_input("Plant / Location")
         status = st.selectbox("Status", ["Open", "Closed", "Cancelled"])
-        
+        st.markdown("**Materials being sourced in this RFQ***")
+        all_materials = get_all_materials()
+        material_lookup = {f"{m['Material Code']} - {m['Material Name']}": m['Material Code'] for m in all_materials}
+        selected_material_labels = st.multiselect("Select Material(s) *", list(material_lookup.keys()))
+
+        save_rfq = st.form_submit_button("Save RFQ")
+
+        if save_rfq:
+            if not selected_material_labels:
+                st.error("Select at least one material for this RFQ.")
+        else:
+            try:
+                add_rfq(auto_rfq_code, str(rfq_date), product_details, buyer, department, str(required_date), category, currency, location, status)
+                for label in selected_material_labels:
+                    add_rfq_material(auto_rfq_code, material_lookup[label])
+                st.success(f"✅ RFQ {auto_rfq_code} created with {len(selected_material_labels)} material(s)!")
+            except Exception as error:
+                st.error(f"Error: {error}")
         save_rfq = st.form_submit_button("Save RFQ")
 
         if save_rfq:
@@ -310,15 +338,16 @@ elif menu == "New RFQ":
             except Exception as error:
                 st.error(f"Error: {error}")
         # --- Generate a private quotation link for a vendor ---
+    # --- Generate a private quotation link for a vendor ---
     st.markdown("---")
     st.subheader("📨 Invite a Vendor to Quote")
-    st.write("Generates a private link. That vendor sees only their own form — no other vendor names or prices.")
+    st.write("The link auto-scopes to this RFQ's materials — vendor sees nothing else.")
 
     existing_rfqs = get_all_rfqs()
     existing_vendors = get_all_vendors()
 
     if not existing_rfqs or not existing_vendors:
-        st.info("Save at least one RFQ and one Vendor first, then come back here to generate links.")
+        st.info("Save at least one RFQ and one Vendor first.")
     else:
         col_a, col_b = st.columns(2)
         with col_a:
@@ -327,16 +356,29 @@ elif menu == "New RFQ":
             vendor_lookup = {f"{v['Vendor Code']} - {v['Vendor Name']}": v['Vendor Code'] for v in existing_vendors}
             link_vendor_label = st.selectbox("Select Vendor", list(vendor_lookup.keys()), key="link_vendor_select")
 
+        preview = get_materials_for_rfq(link_rfq)
+        if preview:
+            st.caption("Scoped to: " + ", ".join(f"{m['Material Code']} - {m['Material Name']}" for m in preview))
+        else:
+            st.warning("⚠️ No materials linked to this RFQ yet — see 'Link Materials to Existing RFQ' below.")
+
         if st.button("Generate Quotation Link"):
             vendor_code = vendor_lookup[link_vendor_label]
             token = create_vendor_link(link_rfq, vendor_code)
             base_url = st.secrets.get("APP_BASE_URL", "https://your-app-name.streamlit.app")
             full_link = f"{base_url}/?token={token}"
-
             st.success(f"Link generated for {link_vendor_label} on {link_rfq}")
             st.code(full_link, language=None)
-            st.caption("👆 Hover the box above — a copy icon appears in the top-right corner. Copy it and send privately (WhatsApp/email). Anyone with this exact link can submit on the vendor's behalf, so don't post it anywhere public.")
-    
+
+        # Backfill tool — for RFQs created before this feature existed
+        st.markdown("---")
+        st.subheader("Link Materials to an Existing RFQ")
+        backfill_rfq = st.selectbox("RFQ", existing_rfqs, key="backfill_rfq_select")
+        backfill_labels = st.multiselect("Add Material(s)", list(material_lookup.keys()), key="backfill_materials")
+        if st.button("Attach Materials"):
+            for label in backfill_labels:
+                add_rfq_material(backfill_rfq, material_lookup[label])
+            st.success(f"Attached {len(backfill_labels)} material(s) to {backfill_rfq}.")
 # Quotation Entry
 elif menu == "Quotation Entry":
     st.header("Enter Vendor Quotation")

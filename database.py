@@ -127,6 +127,14 @@ def create_tables():
                     closure_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS rfq_materials (
+                    id SERIAL PRIMARY KEY,
+                    rfq_number TEXT NOT NULL,
+                    material_code TEXT NOT NULL,
+                    UNIQUE(rfq_number, material_code)
+                )
+            """)
 
 
 def add_vendor(vendor_code, vendor_name, contact_person, email, phone, address, tax_number, category, status):
@@ -428,15 +436,19 @@ def is_order_closed(rfq_number):
     return True if result else False
 
 def create_vendor_link(rfq_number, vendor_code, expires_in_days=14):
-    """Generates a single unguessable link for one vendor to quote on one RFQ."""
-    token = secrets.token_urlsafe(32)  # 256 bits of entropy — not brute-forceable
+    """Auto-scopes the link to whatever materials are linked to this RFQ."""
+    linked_materials = get_materials_for_rfq(rfq_number)
+    material_codes = [m["Material Code"] for m in linked_materials]
+    codes_str = ",".join(material_codes)
+
+    token = secrets.token_urlsafe(32)
     expires_at = datetime.datetime.now() + datetime.timedelta(days=expires_in_days)
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO quotation_links (token, rfq_number, vendor_code, expires_at)
-                VALUES (%s, %s, %s, %s)
-            """, (token, rfq_number, vendor_code, expires_at))
+                INSERT INTO quotation_links (token, rfq_number, vendor_code, expires_at, material_codes)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (token, rfq_number, vendor_code, expires_at, codes_str))
     return token
 
 
@@ -478,3 +490,42 @@ def mark_link_submitted(token):
                 "UPDATE quotation_links SET last_submitted_at = CURRENT_TIMESTAMP WHERE token = %s",
                 (token,)
             )
+
+def add_rfq_material(rfq_number, material_code):
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO rfq_materials (rfq_number, material_code)
+                VALUES (%s, %s)
+                ON CONFLICT (rfq_number, material_code) DO NOTHING
+            """, (rfq_number, material_code))
+    return True
+
+def get_materials_for_rfq(rfq_number):
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT m.material_code AS "Material Code", m.material_name AS "Material Name",
+                       m.description AS "Description", m.unit AS "Unit"
+                FROM rfq_materials rm
+                JOIN materials m ON rm.material_code = m.material_code
+                WHERE rm.rfq_number = %s
+                ORDER BY m.material_name
+            """, (rfq_number,))
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+def get_materials_by_codes(material_codes):
+    if not material_codes:
+        return []
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT material_code AS "Material Code", material_name AS "Material Name",
+                       description AS "Description", unit AS "Unit"
+                FROM materials
+                WHERE material_code = ANY(%s)
+                ORDER BY material_name
+            """, (material_codes,))
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
