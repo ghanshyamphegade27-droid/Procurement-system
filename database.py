@@ -1,9 +1,12 @@
-import psycopg2
+#import psycopg2
 import datetime
 import streamlit as st
+import secrets
 from contextlib import contextmanager
 
 # 1. Connect using the hidden vault we created!
+
+
 @contextmanager
 def get_db_connection():
     """Context manager that auto-commits on success, rolls back on error, and always closes."""
@@ -76,6 +79,17 @@ def create_tables():
                     incoterms TEXT,
                     status TEXT DEFAULT 'Received',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS quotation_links (
+                    id SERIAL PRIMARY KEY,
+                    token TEXT UNIQUE NOT NULL,
+                    rfq_number TEXT NOT NULL,
+                    vendor_code TEXT NOT NULL,
+                    expires_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_submitted_at TIMESTAMP
                 )
             """)
             cursor.execute("""
@@ -152,7 +166,7 @@ def add_quotation(rfq_number, vendor_code, quotation_date, payment_terms, incote
         with connection.cursor() as cursor:
             cursor.execute("""
                 INSERT INTO quotations (rfq_number, vendor_code, quotation_date, payment_terms, incoterms, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """, (rfq_number, vendor_code, quotation_date, payment_terms, incoterms, status))
     return True
 
@@ -162,8 +176,8 @@ def add_quotation_line(rfq_number, vendor_code, material_code, vendor_descriptio
         with connection.cursor() as cursor:
             cursor.execute("""
                 INSERT INTO quotation_lines (rfq_number, vendor_code, material_code, vendor_description, quantity, basic_price, negotiated_price, delivery_days, make)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """, (rfq_number, vendor_code, material_code,vendor_description, quantity, basic_price, negotiated_price, delivery_days, make))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (rfq_number, vendor_code, material_code, vendor_description, quantity, basic_price, negotiated_price, delivery_days, make))
     return True
 
 
@@ -255,12 +269,12 @@ def get_latest_material_price(search_term):
 
     if result:
         return {
-            "Material Name": result[0], 
+            "Material Name": result[0],
             "Material Code": result[1],
-            "Latest Price": result[2], 
+            "Latest Price": result[2],
             "Vendor Code": result[3],
             "Vendor Name": result[4],
-            "Quantity": result[5],    
+            "Quantity": result[5],
             "Date": result[6]
         }
     return None
@@ -273,7 +287,8 @@ def generate_material_code(category):
 
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT material_code FROM materials WHERE material_code LIKE %s ORDER BY id DESC LIMIT 1", (f"{base_prefix}%",))
+            cursor.execute(
+                "SELECT material_code FROM materials WHERE material_code LIKE %s ORDER BY id DESC LIMIT 1", (f"{base_prefix}%",))
             result = cursor.fetchone()
 
     next_number = int(result[0].replace(base_prefix, "")) + 1 if result else 1
@@ -287,7 +302,8 @@ def generate_vendor_code(category):
 
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT vendor_code FROM vendors WHERE vendor_code LIKE %s ORDER BY id DESC LIMIT 1", (f"{base_prefix}%",))
+            cursor.execute(
+                "SELECT vendor_code FROM vendors WHERE vendor_code LIKE %s ORDER BY id DESC LIMIT 1", (f"{base_prefix}%",))
             result = cursor.fetchone()
 
     next_number = int(result[0].replace(base_prefix, "")) + 1 if result else 1
@@ -300,7 +316,8 @@ def generate_rfq_number():
 
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT rfq_number FROM rfqs WHERE rfq_number LIKE %s ORDER BY id DESC LIMIT 1", (f"{base_prefix}%",))
+            cursor.execute(
+                "SELECT rfq_number FROM rfqs WHERE rfq_number LIKE %s ORDER BY id DESC LIMIT 1", (f"{base_prefix}%",))
             result = cursor.fetchone()
 
     next_number = int(result[0].split("-")[-1]) + 1 if result else 1
@@ -310,14 +327,17 @@ def generate_rfq_number():
 def close_order(rfq_number, vendor_code, gst_percentage):
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("INSERT INTO order_closures (rfq_number, vendor_code, gst_percentage) VALUES (%s, %s, %s)", (rfq_number, vendor_code, gst_percentage))
-            cursor.execute("UPDATE rfqs SET status = 'Closed - Delivered' WHERE rfq_number = %s", (rfq_number,))
+            cursor.execute("INSERT INTO order_closures (rfq_number, vendor_code, gst_percentage) VALUES (%s, %s, %s)",
+                           (rfq_number, vendor_code, gst_percentage))
+            cursor.execute(
+                "UPDATE rfqs SET status = 'Closed - Delivered' WHERE rfq_number = %s", (rfq_number,))
     return True
+
 
 def get_closed_orders_report():
     with get_db_connection() as connection:
         cursor = connection.cursor()
-        
+
         cursor.execute("""
             SELECT 
                 oc.rfq_number AS "Order No",
@@ -344,7 +364,7 @@ def get_closed_orders_report():
               ON ql.material_code = m.material_code
             ORDER BY oc.closure_date DESC
         """)
-        
+
         columns = [description[0] for description in cursor.description]
         results = [dict(zip(columns, row)) for row in cursor.fetchall()]
         return results
@@ -365,16 +385,19 @@ def get_all_materials():
             columns = [description[0] for description in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+
 def get_all_rfqs():
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
             cursor.execute('SELECT rfq_number FROM rfqs ORDER BY id DESC')
             return [row[0] for row in cursor.fetchall()]
 
+
 def check_vendor_exists(vendor_name):
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT vendor_code FROM vendors WHERE vendor_name ILIKE %s", (vendor_name,))
+            cursor.execute(
+                "SELECT vendor_code FROM vendors WHERE vendor_name ILIKE %s", (vendor_name,))
             result = cursor.fetchone()
     return result[0] if result else None
 
@@ -382,7 +405,8 @@ def check_vendor_exists(vendor_name):
 def check_material_exists(material_name):
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT material_code FROM materials WHERE material_name ILIKE %s", (material_name,))
+            cursor.execute(
+                "SELECT material_code FROM materials WHERE material_name ILIKE %s", (material_name,))
             result = cursor.fetchone()
     return result[0] if result else None
 
@@ -390,13 +414,68 @@ def check_material_exists(material_name):
 def get_approved_vendor_for_rfq(rfq_number):
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT vendor_code FROM approvals WHERE rfq_number = %s AND approval_status = 'Approved' ORDER BY approval_date DESC LIMIT 1", (rfq_number,))
+            cursor.execute(
+                "SELECT vendor_code FROM approvals WHERE rfq_number = %s AND approval_status = 'Approved' ORDER BY approval_date DESC LIMIT 1", (rfq_number,))
             result = cursor.fetchone()
     return result[0] if result else None
+
 
 def is_order_closed(rfq_number):
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT id FROM order_closures WHERE rfq_number = %s", (rfq_number,))
+            cursor.execute(
+                "SELECT id FROM order_closures WHERE rfq_number = %s", (rfq_number,))
             result = cursor.fetchone()
     return True if result else False
+
+def create_vendor_link(rfq_number, vendor_code, expires_in_days=14):
+    """Generates a single unguessable link for one vendor to quote on one RFQ."""
+    token = secrets.token_urlsafe(32)  # 256 bits of entropy — not brute-forceable
+    expires_at = datetime.datetime.now() + datetime.timedelta(days=expires_in_days)
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO quotation_links (token, rfq_number, vendor_code, expires_at)
+                VALUES (%s, %s, %s, %s)
+            """, (token, rfq_number, vendor_code, expires_at))
+    return token
+
+
+def validate_vendor_link(token):
+    """Returns scoped context for a token, or None if invalid/expired/RFQ no longer open."""
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT ql.rfq_number, ql.vendor_code, ql.expires_at,
+                       r.status, r.product_details, v.vendor_name
+                FROM quotation_links ql
+                JOIN rfqs r ON ql.rfq_number = r.rfq_number
+                JOIN vendors v ON ql.vendor_code = v.vendor_code
+                WHERE ql.token = %s
+            """, (token,))
+            result = cursor.fetchone()
+
+    if not result:
+        return None
+    rfq_number, vendor_code, expires_at, rfq_status, product_details, vendor_name = result
+
+    if expires_at and expires_at < datetime.datetime.now():
+        return None
+    if rfq_status != "Open":  # locks the link automatically once you close/approve the RFQ
+        return None
+
+    return {
+        "rfq_number": rfq_number,
+        "vendor_code": vendor_code,
+        "vendor_name": vendor_name,
+        "product_details": product_details,
+    }
+
+
+def mark_link_submitted(token):
+    with get_db_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE quotation_links SET last_submitted_at = CURRENT_TIMESTAMP WHERE token = %s",
+                (token,)
+            )
