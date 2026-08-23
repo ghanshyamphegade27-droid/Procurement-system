@@ -152,7 +152,7 @@ def add_quotation(rfq_number, vendor_code, quotation_date, payment_terms, incote
         with connection.cursor() as cursor:
             cursor.execute("""
                 INSERT INTO quotations (rfq_number, vendor_code, quotation_date, payment_terms, incoterms, status)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (rfq_number, vendor_code, quotation_date, payment_terms, incoterms, status))
     return True
 

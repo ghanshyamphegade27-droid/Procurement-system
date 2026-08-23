@@ -519,3 +519,49 @@ elif menu == "Order Closure & Report":
             st.info("No closed orders found yet.")
     except Exception as error:
         st.error(f"Waiting for database tables to update... (Error: {error})")
+
+# Must come before the login gate, at the very top of app.py
+query_params = st.query_params
+token = query_params.get("token")
+
+if token:
+    link_info = validate_vendor_link(token)
+
+    if not link_info:
+        st.error("🔒 This link is invalid or has expired. Please contact your procurement contact.")
+        st.stop()
+
+    st.title("📋 Quotation Submission")
+    st.write(f"Submitting as **{link_info['vendor_name']}** for RFQ **{link_info['rfq_number']}**")
+    st.info(link_info["product_details"])
+
+    materials = get_all_materials()
+    material_choices = [f"{m['Material Code']} - {m['Material Name']}" for m in materials]
+
+    with st.form("vendor_quote_form"):
+        selected_material = st.selectbox("Material *", material_choices)
+        vendor_description = st.text_area("Your Quoted Product Details / Deviations")
+        quantity = st.number_input("Quantity", min_value=0.0, step=1.0)
+        basic_price = st.number_input("Basic Price", min_value=0.0, step=1.0)
+        negotiated_price = st.number_input("Your Best Price", min_value=0.0, step=1.0)
+        delivery_days = st.number_input("Delivery Lead Time (Days)", min_value=0, step=1)
+        payment_terms = st.text_input("Payment Terms")
+        incoterms = st.selectbox("Incoterms", ["EXW", "FCA", "FOB", "CIF", "DAP", "DDP", "Other"])
+        make = st.text_input("Make / Brand")
+
+        submitted = st.form_submit_button("Submit Quotation")
+
+        if submitted:
+            if quantity <= 0 or basic_price <= 0 or negotiated_price <= 0:
+                st.error("Quantity and prices must be greater than zero.")
+            else:
+                material_code = selected_material.split(" - ")[0]
+                add_quotation(link_info["rfq_number"], link_info["vendor_code"],
+                               str(datetime.date.today()), payment_terms, incoterms, "Received")
+                add_quotation_line(link_info["rfq_number"], link_info["vendor_code"],
+                                    material_code, vendor_description, quantity,
+                                    basic_price, negotiated_price, delivery_days, make)
+                mark_vendor_link_submitted := mark_link_submitted(token)
+                st.success("✅ Thank you! Your quotation has been received.")
+
+    st.stop()   # <-- non-negotiable: prevents fallthrough into the internal app
