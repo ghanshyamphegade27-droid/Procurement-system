@@ -108,8 +108,8 @@ if token:
                                         material_code, desc, qty, basic, neg, delivery, make)
                 mark_link_submitted(token)
                 st.success("✅ Thank you! Your quotation has been received.")
-
     st.stop()
+
 # --- SECURITY GATE ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -315,11 +315,17 @@ elif menu == "New RFQ":
         material_lookup = {f"{m['Material Code']} - {m['Material Name']}": m['Material Code'] for m in all_materials}
         selected_material_labels = st.multiselect("Select Material(s) *", list(material_lookup.keys()))
 
-        save_rfq = st.form_submit_button("Save RFQ")
+        st.markdown("**Materials being sourced in this RFQ***")
 
-        if save_rfq:
-            if not selected_material_labels:
-                st.error("Select at least one material for this RFQ.")
+    all_materials = get_all_materials()
+    material_lookup = {f"{m['Material Code']} - {m['Material Name']}": m['Material Code'] for m in all_materials}
+    selected_material_labels = st.multiselect("Select Material(s) *", list(material_lookup.keys()))
+
+    save_rfq = st.form_submit_button("Save RFQ")
+
+    if save_rfq:
+        if not selected_material_labels:
+            st.error("Select at least one material for this RFQ.")
         else:
             try:
                 add_rfq(auto_rfq_code, str(rfq_date), product_details, buyer, department, str(required_date), category, currency, location, status)
@@ -328,7 +334,22 @@ elif menu == "New RFQ":
                 st.success(f"✅ RFQ {auto_rfq_code} created with {len(selected_material_labels)} material(s)!")
             except Exception as error:
                 st.error(f"Error: {error}")
-        save_rfq = st.form_submit_button("Save RFQ")
+
+
+       #save_rfq = st.form_submit_button("Save RFQ")
+
+        #if save_rfq:
+        #   if not selected_material_labels:
+        #        st.error("Select at least one material for this RFQ.")
+        #else:
+         #   try:
+          #      add_rfq(auto_rfq_code, str(rfq_date), product_details, buyer, department, str(required_date), category, currency, location, status)
+           #     for label in selected_material_labels:
+            #        add_rfq_material(auto_rfq_code, material_lookup[label])
+             #   st.success(f"✅ RFQ {auto_rfq_code} created with {len(selected_material_labels)} material(s)!")
+            #except Exception as error:
+          #      st.error(f"Error: {error}")
+        #save_rfq = st.form_submit_button("Save RFQ")
 
         if save_rfq:
             try:
