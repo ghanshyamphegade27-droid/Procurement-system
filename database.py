@@ -1,4 +1,4 @@
-#import psycopg2
+import psycopg2
 import datetime
 import streamlit as st
 import secrets
