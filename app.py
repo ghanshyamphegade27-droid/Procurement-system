@@ -25,7 +25,10 @@ from database import (
     check_vendor_exists,
     check_material_exists,
     get_approved_vendor_for_rfq,  # <--- NEW
-    is_order_closed
+    is_order_closed,
+    validate_vendor_link,
+    datetime,
+    mark_link_submitted
 )
 
 # Create the database tables
@@ -561,7 +564,7 @@ if token:
                 add_quotation_line(link_info["rfq_number"], link_info["vendor_code"],
                                     material_code, vendor_description, quantity,
                                     basic_price, negotiated_price, delivery_days, make)
-                mark_vendor_link_submitted := mark_link_submitted(token)
+                mark_link_submitted(token)
                 st.success("✅ Thank you! Your quotation has been received.")
 
     st.stop()   # <-- non-negotiable: prevents fallthrough into the internal app
