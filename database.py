@@ -6,7 +6,6 @@ from contextlib import contextmanager
 
 # 1. Connect using the hidden vault we created!
 
-
 @contextmanager
 def get_db_connection():
     """Context manager that auto-commits on success, rolls back on error, and always closes."""
