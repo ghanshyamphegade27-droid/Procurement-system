@@ -458,34 +458,42 @@ def create_vendor_link(rfq_number, vendor_code, expires_in_days=14):
 
 
 def validate_vendor_link(token):
-    """Returns scoped context for a token, or None if invalid/expired/RFQ no longer open."""
     with get_db_connection() as connection:
         with connection.cursor() as cursor:
+            # We added ql.material_codes to the SELECT query here
             cursor.execute("""
-                SELECT ql.rfq_number, ql.vendor_code, ql.expires_at,
-                       r.status, r.product_details, v.vendor_name
+                SELECT ql.rfq_number, ql.vendor_code, ql.expires_at, ql.submitted, 
+                       v.vendor_name, r.product_details, ql.material_codes
                 FROM quotation_links ql
-                JOIN rfqs r ON ql.rfq_number = r.rfq_number
                 JOIN vendors v ON ql.vendor_code = v.vendor_code
+                JOIN rfqs r ON ql.rfq_number = r.rfq_number
                 WHERE ql.token = %s
             """, (token,))
+            
             result = cursor.fetchone()
+            
+            if not result:
+                return None
+                
+            rfq_number, vendor_code, expires_at, submitted, vendor_name, product_details, material_codes_str = result
+            
+            # If the link is already submitted or expired, it's invalid
+            if submitted or datetime.datetime.now() > expires_at:
+                return None
+                
+            # Turn the comma-separated string back into a Python list
+            if material_codes_str:
+                material_codes_list = material_codes_str.split(',')
+            else:
+                material_codes_list = []
 
-    if not result:
-        return None
-    rfq_number, vendor_code, expires_at, rfq_status, product_details, vendor_name = result
-
-    if expires_at and expires_at < datetime.datetime.now():
-        return None
-    if rfq_status != "Open":  # locks the link automatically once you close/approve the RFQ
-        return None
-
-    return {
-        "rfq_number": rfq_number,
-        "vendor_code": vendor_code,
-        "vendor_name": vendor_name,
-        "product_details": product_details,
-    }
+            return {
+                "rfq_number": rfq_number,
+                "vendor_code": vendor_code,
+                "vendor_name": vendor_name,
+                "product_details": product_details,
+                "material_codes": material_codes_list  # Now app.py will find this key!
+            }
 
 
 def mark_link_submitted(token):
