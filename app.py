@@ -310,56 +310,29 @@ elif menu == "New RFQ":
         currency = st.selectbox("Currency", ["INR", "USD", "EUR"])
         location = st.text_input("Plant / Location")
         status = st.selectbox("Status", ["Open", "Closed", "Cancelled"])
+        
         st.markdown("**Materials being sourced in this RFQ***")
         all_materials = get_all_materials()
         material_lookup = {f"{m['Material Code']} - {m['Material Name']}": m['Material Code'] for m in all_materials}
         selected_material_labels = st.multiselect("Select Material(s) *", list(material_lookup.keys()))
 
-        st.markdown("**Materials being sourced in this RFQ***")
-
-    all_materials = get_all_materials()
-    material_lookup = {f"{m['Material Code']} - {m['Material Name']}": m['Material Code'] for m in all_materials}
-    selected_material_labels = st.multiselect("Select Material(s) *", list(material_lookup.keys()))
-
-    save_rfq = st.form_submit_button("Save RFQ")
-
-    if save_rfq:
-        if not selected_material_labels:
-            st.error("Select at least one material for this RFQ.")
-        else:
-            try:
-                add_rfq(auto_rfq_code, str(rfq_date), product_details, buyer, department, str(required_date), category, currency, location, status)
-                for label in selected_material_labels:
-                    add_rfq_material(auto_rfq_code, material_lookup[label])
-                st.success(f"✅ RFQ {auto_rfq_code} created with {len(selected_material_labels)} material(s)!")
-            except Exception as error:
-                st.error(f"Error: {error}")
-
-
-       #save_rfq = st.form_submit_button("Save RFQ")
-
-        #if save_rfq:
-        #   if not selected_material_labels:
-        #        st.error("Select at least one material for this RFQ.")
-        #else:
-         #   try:
-          #      add_rfq(auto_rfq_code, str(rfq_date), product_details, buyer, department, str(required_date), category, currency, location, status)
-           #     for label in selected_material_labels:
-            #        add_rfq_material(auto_rfq_code, material_lookup[label])
-             #   st.success(f"✅ RFQ {auto_rfq_code} created with {len(selected_material_labels)} material(s)!")
-            #except Exception as error:
-          #      st.error(f"Error: {error}")
-        #save_rfq = st.form_submit_button("Save RFQ")
+        # Everything above this, AND this button, are safely inside the form
+        save_rfq = st.form_submit_button("Save RFQ")
 
         if save_rfq:
-            try:
-                # Pass auto_rfq_code and product_details!
-                add_rfq(auto_rfq_code, str(rfq_date), product_details, buyer, department, str(required_date), category, currency, location, status)
-                st.success(f"✅ RFQ {auto_rfq_code} created successfully!")
-            except Exception as error:
-                st.error(f"Error: {error}")
-        # --- Generate a private quotation link for a vendor ---
+            if not selected_material_labels:
+                st.error("Select at least one material for this RFQ.")
+            else:
+                try:
+                    add_rfq(auto_rfq_code, str(rfq_date), product_details, buyer, department, str(required_date), category, currency, location, status)
+                    for label in selected_material_labels:
+                        add_rfq_material(auto_rfq_code, material_lookup[label])
+                    st.success(f"✅ RFQ {auto_rfq_code} created with {len(selected_material_labels)} material(s)!")
+                except Exception as error:
+                    st.error(f"Error: {error}")
+
     # --- Generate a private quotation link for a vendor ---
+    # (This sits OUTSIDE the form, which is correct)
     st.markdown("---")
     st.subheader("📨 Invite a Vendor to Quote")
     st.write("The link auto-scopes to this RFQ's materials — vendor sees nothing else.")
@@ -400,6 +373,8 @@ elif menu == "New RFQ":
             for label in backfill_labels:
                 add_rfq_material(backfill_rfq, material_lookup[label])
             st.success(f"Attached {len(backfill_labels)} material(s) to {backfill_rfq}.")
+
+           
 # Quotation Entry
 elif menu == "Quotation Entry":
     st.header("Enter Vendor Quotation")
