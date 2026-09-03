@@ -135,6 +135,11 @@ def create_tables():
                     UNIQUE(rfq_number, material_code)
                 )
             """)
+            # Add this right after all the CREATE TABLE statements
+            cursor.execute("""
+                ALTER TABLE quotation_links 
+                ADD COLUMN IF NOT EXISTS material_codes TEXT;
+            """)
 
 
 def add_vendor(vendor_code, vendor_name, contact_person, email, phone, address, tax_number, category, status):
