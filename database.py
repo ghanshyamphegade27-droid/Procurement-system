@@ -140,6 +140,11 @@ def create_tables():
                 ALTER TABLE quotation_links 
                 ADD COLUMN IF NOT EXISTS material_codes TEXT;
             """)
+            # Update your database tables to include the new columns
+            cursor.execute("""
+                ALTER TABLE quotation_links ADD COLUMN IF NOT EXISTS material_codes TEXT;
+                ALTER TABLE quotation_links ADD COLUMN IF NOT EXISTS submitted BOOLEAN DEFAULT FALSE;
+            """)
 
 
 def add_vendor(vendor_code, vendor_name, contact_person, email, phone, address, tax_number, category, status):
